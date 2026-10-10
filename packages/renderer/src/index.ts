@@ -1,1 +1,15 @@
-export {};
+export type { MapSource, WorldHandle, WorldMeta, Dimension, RegionRef } from "./source.js";
+export { scanWorld, listRegionFiles } from "./source.js";
+export type { RenderOptions, RenderResult } from "./render.js";
+export { renderMap } from "./render.js";
+export { BlockColorResolver, defaultResolver } from "./palette/color-resolver.js";
+export type { Rgb } from "./palette/color-resolver.js";
+export { RegionFile } from "./anvil/region-reader.js";
+export { readChunkColumns } from "./anvil/chunk.js";
+export type { ColumnTop, ChunkColumns } from "./anvil/chunk.js";
+export { TopDownStrategy } from "./render/top-down.js";
+export { encodeRegionBlocks } from "./render/block-data.js";
+export type { EncodedRegionBlocks } from "./render/block-data.js";
+export type { RegionGrid, RenderStrategy } from "./render/strategy.js";
+export { computeMaxZoom, buildTilePyramid, DEFAULT_TILE_SIZE } from "./render/tiles.js";
+export type { WorldBounds, PyramidResult } from "./render/tiles.js";

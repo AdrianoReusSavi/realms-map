@@ -8,9 +8,10 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "tsc -p packages/realms/tsconfig.json",
-    "setup": "tsx packages/realms/src/setup.ts",
-    "update": "tsx packages/realms/src/update.ts",
+    "build": "tsc",
+    "render": "npm run build && node dist/packages/local/src/cli.js",
+    "setup": "npm run build && tsx packages/realms/src/setup.ts",
+    "update": "npm run build && tsx packages/realms/src/update.ts",
     "test": "vitest run"
   },
   "license": "MIT"

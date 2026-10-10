@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { escapeHtml } from "../src/patch-map.js";
+import { escapeHtml } from "../src/escape-html.js";
 
 describe("escapeHtml", () => {
   it("escapes < and >", () => {

@@ -5,5 +5,4 @@ export const config = {
   outputPath: process.env.OUTPUT_PATH || "./output",
   backupPath: process.env.BACKUP_PATH || "./backups",
   authCachePath: process.env.AUTH_CACHE_PATH || "./auth-cache",
-  minecraftJar: process.env.MINECRAFT_JAR || "",
 };

@@ -1,1 +1,1 @@
-export {};
+export { LocalMapSource } from "./source.js";

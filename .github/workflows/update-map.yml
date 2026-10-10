@@ -59,50 +59,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: output
-          key: render-v3-${{ github.run_id }}
-          restore-keys: render-v3-
-
-      - name: Get Minecraft version
-        id: mc-version
-        run: |
-          MANIFEST=$(curl -sS "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json")
-          echo "$MANIFEST" | node -e "
-            const d = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
-            const v = d.versions.find(v => v.id === d.latest.release);
-            console.log('version=' + d.latest.release);
-            console.log('version_url=' + v.url);
-          " >> $GITHUB_OUTPUT
-
-      - name: Cache uNmINeD CLI
-        uses: actions/cache@v4
-        id: unmined-cache
-        with:
-          path: /opt/unmined-cli
-          key: unmined-cli-${{ steps.mc-version.outputs.version }}
-
-      - name: Install uNmINeD CLI
-        if: steps.unmined-cache.outputs.cache-hit != 'true'
-        run: |
-          curl -sS "https://unmined.net/download/unmined-cli-linux-x64-dev/" | tar -xz -C /opt
-          mv /opt/unmined-cli* /opt/unmined-cli
-
-      - name: Add uNmINeD to PATH
-        run: echo "/opt/unmined-cli" >> $GITHUB_PATH
-
-      - name: Cache Minecraft JAR
-        uses: actions/cache@v4
-        id: jar-cache
-        with:
-          path: /tmp/minecraft.jar
-          key: minecraft-jar-${{ steps.mc-version.outputs.version }}
-
-      - name: Download Minecraft client JAR
-        if: steps.jar-cache.outputs.cache-hit != 'true'
-        run: |
-          CLIENT_URL=$(curl -sS "${{ steps.mc-version.outputs.version_url }}" \
-            | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8'));console.log(d.downloads.client.url)")
-          curl -sS "$CLIENT_URL" -o /tmp/minecraft.jar
-          echo "Downloaded Minecraft ${{ steps.mc-version.outputs.version }} client JAR"
+          key: render-v5-${{ github.run_id }}
+          restore-keys: render-v5-
 
       - name: Download and render
         env:
@@ -110,7 +68,6 @@ jobs:
           AUTH_CACHE_PATH: ./auth-cache
           BACKUP_PATH: ./backups
           OUTPUT_PATH: ./output
-          MINECRAFT_JAR: /tmp/minecraft.jar
         run: npm run update
 
       - name: Copy favicon

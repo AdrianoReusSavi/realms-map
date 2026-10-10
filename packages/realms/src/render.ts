@@ -1,39 +1,22 @@
-import { spawn } from "node:child_process";
-import { mkdir } from "node:fs/promises";
+import {
+  renderMap as renderWorldMap,
+  scanWorld,
+  type MapSource,
+} from "@minecraft-map/renderer";
 import { config } from "./config.js";
-import { log } from "./logger.js";
 
-export async function renderMap(worldPath: string): Promise<void> {
-  await mkdir(config.outputPath, { recursive: true });
+export async function renderMap(worldPath: string, realmName = "Unknown"): Promise<void> {
+  const meta = await scanWorld(worldPath);
+  const source: MapSource = {
+    name: `Realm: ${realmName}`,
+    async acquire() {
+      return { worldPath, meta };
+    },
+    async release() {},
+  };
 
-  const args = [
-    "web",
-    "render",
-    `--world=${worldPath}`,
-    `--output=${config.outputPath}`,
-    "--dimension=minecraft:overworld",
-    "--zoomin=4",
-    "--shadows=true",
-    "--background=#000000",
-    "--imageformat=Png",
-  ];
-
-  if (config.minecraftJar) {
-    args.push(`--java-client-jar=${config.minecraftJar}`);
-  }
-
-  log.info(`Rendering with uNmINeD (${args.length} args)`);
-
-  return new Promise((resolve, reject) => {
-    const child = spawn("unmined-cli", args, { stdio: "inherit" });
-    child.on("close", (code) => {
-      if (code === 0) {
-        log.info(`Map rendered: ${config.outputPath}`);
-        resolve();
-      } else {
-        reject(new Error(`unmined-cli exited with code ${code}`));
-      }
-    });
-    child.on("error", reject);
+  await renderWorldMap(source, {
+    outputPath: config.outputPath,
+    dimension: "overworld",
   });
 }

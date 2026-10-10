@@ -1,7 +1,6 @@
 import { createAuthflow } from "./auth.js";
 import { createRealmsApi, downloadBackup } from "./realms.js";
 import { renderMap } from "./render.js";
-import { patchMap } from "./patch-map.js";
 import { config } from "./config.js";
 import { log } from "./logger.js";
 
@@ -19,10 +18,7 @@ async function main(): Promise<void> {
   const { worldPath, realmName } = await downloadBackup(api);
 
   log.info("Rendering map...");
-  await renderMap(worldPath);
-
-  log.info("Patching map...");
-  await patchMap(realmName);
+  await renderMap(worldPath, realmName);
 
   log.info("Update complete.");
 }

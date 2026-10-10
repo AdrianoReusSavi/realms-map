@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@minecraft-map/renderer": "*",
     "dotenv": "^16.4.7",
     "prismarine-auth": "^2.5.0",
     "prismarine-realms": "^1.5.0",

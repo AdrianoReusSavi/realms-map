@@ -1,164 +1,138 @@
-<h1 align="center">Realms Map</h1>
+# Realms Map
 
-<p align="center">
-  Automated map viewer for Minecraft Java Realms — download, render and browse your world anytime
-</p>
+An independent tool for rendering Minecraft Java worlds as interactive top-down maps. It can read a local save or download a backup from Minecraft Realms. It includes its own Anvil/NBT reader and renderer.
 
-<p align="center">
-  <img src="https://github.com/AdrianoReusSavi/realms-map/actions/workflows/update-map.yml/badge.svg" />
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-green" />
-  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-22-green" />
-  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5-blue" />
-</p>
+> **NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.**
+>
+> Realms Map is an independent open-source project maintained by [Adriano Reus Savi](https://github.com/AdrianoReusSavi). Minecraft and Minecraft Realms are referenced only to identify the game and service this tool works with. For project questions, contact the maintainer through [GitHub](https://github.com/AdrianoReusSavi).
 
----
+![Example map](docs/map.png)
 
-## Overview
-
-<!-- TODO: Replace with actual screenshot -->
-
-| Map |
-|-----|
-| ![Map](docs/map.png) |
-
-## About
-
-Realms Map automatically downloads your Minecraft Java Realms backup, renders an interactive 2D map using [uNmINeD](https://unmined.net/), and deploys it to GitHub Pages. Updated every 12 hours via GitHub Actions.
-
-> This project is not affiliated with, endorsed by, or associated with Mojang Studios or Microsoft.
-> Minecraft is a trademark of Mojang Studios.
-
-## Built with
-
-- [Node.js 22](https://nodejs.org/) with TypeScript
-- [prismarine-auth](https://github.com/PrismarineJS/prismarine-auth) for Microsoft OAuth
-- [prismarine-realms](https://github.com/PrismarineJS/prismarine-realms) for Realms API
-- [uNmINeD CLI](https://unmined.net/) for map rendering
-- [Vitest](https://vitest.dev/) for unit testing
-- [GitHub Actions](https://github.com/features/actions) for CI/CD and deployment
+Minecraft is a trademark of Mojang Studios. All other product and service names are the property of their respective owners.
 
 ## Features
 
-- Microsoft authentication with device code flow
-- Automatic Realms backup download and extraction
-- Interactive 2D map with zoom and navigation
-- Custom UI with realm name, update timestamp and dark theme
-- Retry logic for resilient API calls
-- Setup wizard that generates GitHub Secrets
-- Automated 12-hour update cycle via GitHub Actions
-- GitHub Pages deployment with multi-level caching
-- XSS prevention on dynamic content
+- Render local Minecraft Java saves without a Realm account.
+- Download and render a Java Realm backup using Microsoft authentication.
+- Generate a color-coded surface map with hill shading and a multi-zoom tile pyramid.
+- Inspect the surface block, its properties, and its Y coordinate by hovering over the map.
+- Deploy a Realm map to GitHub Pages on a weekly schedule or on demand.
+- Read Anvil region and NBT data with project-owned TypeScript code.
 
-## Architecture
+The map shows the top block of each column at one pixel per block at its highest generated zoom. Zooming further preserves the pixel edges; it does not reveal block faces or texture-level detail.
 
-```
-Scheduler (cron every 12h)
-       |
-       v
-Microsoft OAuth (prismarine-auth)
-  Device code flow -> Xbox Live -> Minecraft token
-       |
-       v
-Realms API (prismarine-realms)
-  Download backup (.tar.gz)
-       |
-       v
-uNmINeD CLI
-  Render world -> static HTML map with tiles
-       |
-       v
-Patch Map
-  Inject custom header, footer, dark theme
-       |
-       v
-GitHub Pages
-  Deploy static site
-```
+## Requirements
 
-## Project structure
+- Node.js 22 or later
+- npm
+- For Realm rendering: a Microsoft account with access to a Minecraft Java Realm
+- For GitHub Pages deployment: a GitHub repository fork and its Actions/Pages features enabled
 
-```
-src/
-  auth.ts         Microsoft authentication setup
-  config.ts       Environment variable loading
-  logger.ts       Logging utility with timestamps
-  patch-map.ts    HTML/CSS/JS injection for custom UI
-  realms.ts       Realms API operations and backup extraction
-  render.ts       uNmINeD CLI map rendering
-  retry.ts        Generic retry utility
-  setup.ts        Initial setup wizard
-  update.ts       Main update workflow orchestration
-tests/
-  encode-auth-cache.test.ts
-  escape-html.test.ts
-  find-world-dir.test.ts
-  retry.test.ts
-```
-
-## Getting started
-
-### Prerequisites
-
-- [Node.js 22+](https://nodejs.org/)
-- A Minecraft Java Edition account with an active Realm
-
-### 1. Fork and clone
-
-Fork this repository on GitHub, then:
+## Install
 
 ```bash
 git clone https://github.com/<your-username>/realms-map.git
 cd realms-map
-npm install
+npm ci
 ```
 
-### 2. Generate secrets
-
-Run the setup wizard to authenticate and get your credentials:
+Build the TypeScript packages:
 
 ```bash
-cp .env.example .env
+npm run build
+```
+
+## Render a local world
+
+Pass the path to a Minecraft Java save directory. It should contain `level.dat` and the dimension's `region` directory.
+
+```powershell
+npm run render -- "C:\Users\you\AppData\Roaming\.minecraft\saves\MyWorld" --open
+```
+
+The map is written to `./output` by default. `--open` opens its `index.html` after rendering. To enable block inspection reliably, serve the output over HTTP instead of opening the file directly:
+
+```powershell
+python -m http.server 8000 --directory output
+```
+
+Then open <http://localhost:8000> in a browser. The viewer loads Leaflet from unpkg, so an internet connection is required to load the map interface.
+
+Options:
+
+| Option | Description | Default |
+| --- | --- | --- |
+| `--output`, `-o <dir>` | Output directory | `./output` |
+| `--dimension`, `-d <dim>` | `overworld`, `nether`, or `end` | `overworld` |
+| `--zoom-in`, `-z <n>` | Extra viewer zoom levels beyond generated tiles | `4` |
+| `--background`, `-b <#hex>` | Background color | `#000000` |
+| `--open` | Open the generated `index.html` | off |
+| `--help`, `-h` | Show command help | |
+
+Examples:
+
+```powershell
+npm run render -- "C:\path\to\world" --dimension nether --output .\nether-map
+npm run render -- "C:\path\to\world" -h
+```
+
+## Render a Minecraft Realm
+
+### Authenticate and choose a Realm
+
+Run the setup wizard:
+
+```bash
 npm run setup
 ```
 
-A device code will be shown in the terminal. Open the URL in your browser, enter the code and sign in with your Microsoft account. The wizard will list your Realms and output two values: `REALM_ID` and `AUTH_CACHE`.
+Sign in at the Microsoft URL shown in the terminal and enter the device code. The wizard lists the Realms available to the account and prints `REALM_ID` and `AUTH_CACHE` values. It uses the first Realm's ID in its example; use the ID for the Realm you intend to render.
 
-### 3. Configure repository secrets
+Keep `AUTH_CACHE` private: it contains authentication data. Do not commit it to the repository.
 
-Go to your fork on GitHub:
+### Deploy with GitHub Actions
 
-1. **Settings** > **Secrets and variables** > **Actions**
-2. Click **New repository secret** and add:
-   - `REALM_ID` — the ID of the Realm you want to map
-   - `AUTH_CACHE` — the base64 string from the setup wizard
+1. Fork the repository and install dependencies as above.
+2. Add repository Actions secrets under **Settings → Secrets and variables → Actions**:
+   - `REALM_ID`: the selected Realm ID.
+   - `AUTH_CACHE`: the base64 value printed by the setup wizard.
+3. Under **Settings → Pages**, set the source to **GitHub Actions**.
+4. Run **Actions → Update Map → Run workflow**.
 
-### 4. Enable GitHub Pages
+The workflow downloads the Realm backup, renders it into `output`, and deploys that directory to GitHub Pages. It also runs every Monday at 06:00 UTC. The published URL is shown in the workflow run summary.
 
-1. **Settings** > **Pages**
-2. Under **Source**, select **GitHub Actions**
+### Run the Realm update locally
 
-### 5. Run the workflow
+After setting up authentication, provide the Realm ID and auth cache path as environment variables. The default paths for backups and output are shown below:
 
-1. Go to the **Actions** tab
-2. Select **Update Map**
-3. Click **Run workflow**
-
-The map will be rendered and deployed to `https://<your-username>.github.io/realms-map/`. After the first run, the workflow updates automatically every 12 hours.
-
-## Tests
-
-```bash
-npm test
+```powershell
+$env:REALM_ID = "your-realm-id"
+$env:AUTH_CACHE_PATH = ".\auth-cache"
+$env:BACKUP_PATH = ".\backups"
+$env:OUTPUT_PATH = ".\output"
+npm run update
 ```
 
-## Contribute
+## Project layout
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Commit your changes
-4. Push to the branch (`git push origin feature/my-feature`)
-5. Open a Pull Request
+```text
+packages/
+  core/       Anvil region, chunk, and NBT parsing
+  renderer/   Block palette, top-down rendering, tiles, and map viewer
+  local/      Local-world source and CLI
+  realms/     Microsoft authentication, Realm backup, and update flow
+```
+
+Root commands:
+
+| Command | Description |
+| --- | --- |
+| `npm run build` | Compile all TypeScript packages into `dist/` |
+| `npm run render -- <world-path> [options]` | Render a local world |
+| `npm run setup` | Authenticate and print Realm setup values |
+| `npm run update` | Download and render the configured Realm |
+| `npm test` | Run the Vitest suite |
 
 ## License
 
-Distributed under the MIT License. See [LICENSE](LICENSE) for details.
+MIT. See [LICENSE](LICENSE).

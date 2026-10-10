@@ -3,12 +3,20 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "minecraft-map": "src/cli.ts"
+  },
   "scripts": {
     "build": "tsc",
+    "render": "tsx src/cli.ts",
     "test": "vitest run"
+  },
+  "dependencies": {
+    "@minecraft-map/renderer": "*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.7.0",
     "vitest": "^4.1.4"
   },

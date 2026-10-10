@@ -17,7 +17,7 @@ export async function encodeAuthCache(): Promise<string> {
 }
 
 async function main(): Promise<void> {
-  log.info("RealmsMap Setup");
+  log.info("Realms Map Setup");
   log.info("Authenticating with Microsoft...");
 
   const auth = createAuthflow();
