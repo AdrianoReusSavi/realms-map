@@ -20,7 +20,7 @@ export class TopDownStrategy implements RenderStrategy {
 
     for (let i = 0; i < grid.columns.length; i++) {
       const top = grid.columns[i];
-      heights[i] = top === null ? -1 : top.y;
+      heights[i] = top === null ? -1 : top.ground?.y ?? top.underwater?.y ?? top.y;
     }
 
     for (let z = 0; z < REGION_SIZE; z++) {
@@ -37,8 +37,14 @@ export class TopDownStrategy implements RenderStrategy {
           continue;
         }
 
-        const [r, g, b] = resolver.resolve(top.blockName);
-        const shade = hillshade(heights, x, z);
+        const ground = top.ground
+          ? resolver.resolve(top.ground.blockName)
+          : top.underwater
+            ? resolver.resolve(top.underwater.blockName)
+            : resolver.resolve(top.blockName);
+        const waterDepth = top.ground ? top.y - top.ground.y : top.underwater?.depth ?? 0;
+        const [r, g, b] = top.underwater ? blendWater(ground, waterDepth) : ground;
+        const shade = hillshade(heights, x, z) * castShadow(heights, x, z);
         buf[out] = clamp(r * shade);
         buf[out + 1] = clamp(g * shade);
         buf[out + 2] = clamp(b * shade);
@@ -50,23 +56,82 @@ export class TopDownStrategy implements RenderStrategy {
   }
 }
 
-const HILLSCALE = 0.15;
-const SHADE_MIN = 0.45;
-const SHADE_MAX = 1.45;
+const VERTICAL_EXAGGERATION = 1.25;
+const AMBIENT_LIGHT = 0.68;
+const DIRECT_LIGHT = 0.32;
+const SHADE_MIN = 0.55;
+const SHADE_MAX = 1.25;
+const LIGHT_AZIMUTH = (315 * Math.PI) / 180;
+const LIGHT_ALTITUDE = Math.PI / 4;
+const WATER_COLOR: readonly [number, number, number] = [54, 112, 170];
+
+function blendWater(ground: readonly [number, number, number], depth: number): [number, number, number] {
+  const opacity = Math.min(0.65, 0.45 + Math.max(0, depth - 1) * 0.02);
+  return [
+    ground[0] * (1 - opacity) + WATER_COLOR[0] * opacity,
+    ground[1] * (1 - opacity) + WATER_COLOR[1] * opacity,
+    ground[2] * (1 - opacity) + WATER_COLOR[2] * opacity,
+  ];
+}
+
+function castShadow(heights: Int32Array, x: number, z: number): number {
+  const groundHeight = heights[regionCellIndex(x, z)];
+  if (groundHeight < 0) return 1;
+
+  let occlusion = 0;
+  for (let distance = 1; distance <= 14; distance++) {
+    const sourceX = x - distance;
+    const sourceZ = z - distance;
+    if (sourceX < 0 || sourceZ < 0) break;
+
+    const sourceHeight = heights[regionCellIndex(sourceX, sourceZ)];
+    if (sourceHeight < 0) continue;
+
+    const rise = sourceHeight - groundHeight - distance * Math.SQRT2 * Math.tan(LIGHT_ALTITUDE);
+    if (rise <= 0) continue;
+
+    const strength = Math.min(0.5, (rise / 10) * (1 - distance / 18));
+    occlusion = Math.max(occlusion, strength);
+  }
+
+  return 1 - occlusion;
+}
 
 function hillshade(heights: Int32Array, x: number, z: number): number {
   const i = regionCellIndex(x, z);
   const h = heights[i];
-  const xEast = x < REGION_SIZE - 1 ? regionCellIndex(x + 1, z) : i;
-  const zSouth = z < REGION_SIZE - 1 ? regionCellIndex(x, z + 1) : i;
-  const dx = (heights[xEast] - h) * HILLSCALE;
-  const dz = (heights[zSouth] - h) * HILLSCALE;
-  const shade = 1 - (dx + dz);
-  
+  const west = sampleHeight(heights, x - 1, z, h);
+  const east = sampleHeight(heights, x + 1, z, h);
+  const north = sampleHeight(heights, x, z - 1, h);
+  const south = sampleHeight(heights, x, z + 1, h);
+  const dx = (east - west) * gradientScale(x);
+  const dz = (south - north) * gradientScale(z);
+
+  const nx = -dx * VERTICAL_EXAGGERATION;
+  const nz = -dz * VERTICAL_EXAGGERATION;
+  const normalLength = Math.sqrt(nx * nx + nz * nz + 1);
+  const lx = Math.sin(LIGHT_AZIMUTH) * Math.cos(LIGHT_ALTITUDE);
+  const lz = -Math.cos(LIGHT_AZIMUTH) * Math.cos(LIGHT_ALTITUDE);
+  const ly = Math.sin(LIGHT_ALTITUDE);
+  const illumination = (nx * lx + nz * lz + ly) / normalLength;
+  const shade = AMBIENT_LIGHT + DIRECT_LIGHT * illumination / ly;
+
   if (shade < SHADE_MIN) return SHADE_MIN;
   if (shade > SHADE_MAX) return SHADE_MAX;
-  
+
   return shade;
+}
+
+function sampleHeight(heights: Int32Array, x: number, z: number, fallback: number): number {
+  const clampedX = Math.max(0, Math.min(REGION_SIZE - 1, x));
+  const clampedZ = Math.max(0, Math.min(REGION_SIZE - 1, z));
+  const height = heights[regionCellIndex(clampedX, clampedZ)];
+  
+  return height < 0 ? fallback : height;
+}
+
+function gradientScale(coordinate: number): number {
+  return coordinate === 0 || coordinate === REGION_SIZE - 1 ? 1 : 0.5;
 }
 
 function clamp(v: number): number {

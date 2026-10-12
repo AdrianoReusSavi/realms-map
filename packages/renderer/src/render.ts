@@ -11,6 +11,7 @@ import { buildTilePyramid, type WorldBounds, DEFAULT_TILE_SIZE } from "./render/
 import { writeViewer } from "./render/viewer.js";
 import { encodeRegionBlocks, type EncodedRegionBlocks } from "./render/block-data.js";
 import { defaultResolver } from "./palette/color-resolver.js";
+import { loadSurfaceTextureSamples } from "./render/texture-assets.js";
 import {
   listRegionFiles,
   type MapSource,
@@ -83,6 +84,11 @@ export async function renderMap(
       viewerRegions.push({ regionX, regionZ, dataPath, palette });
     }
 
+    const textureSamples = await loadSurfaceTextureSamples(
+      handle.meta.gameVersion,
+      regionBuffers.flatMap((region) => region.palette),
+    );
+
     const bounds: WorldBounds = {
       minBlockX: minRX * REGION_SIZE,
       minBlockZ: minRZ * REGION_SIZE,
@@ -92,6 +98,8 @@ export async function renderMap(
     const pyramid = await buildTilePyramid(worldImage, bounds, opts.outputPath, {
       tileSize: opts.tileSize ?? DEFAULT_TILE_SIZE,
       background: bgRgb,
+      regionBlocks: regionBuffers,
+      textures: textureSamples,
     });
 
     await writeViewer({
@@ -101,6 +109,7 @@ export async function renderMap(
       heightBlocks: worldH,
       minZoom: pyramid.minZoom,
       maxNativeZoom: pyramid.maxZoom,
+      baseZoom: pyramid.baseZoom,
       zoomIn: opts.zoomIn ?? 4,
       tileSize: pyramid.tileSize,
       background: bgHex,

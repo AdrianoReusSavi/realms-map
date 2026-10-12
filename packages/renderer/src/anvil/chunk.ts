@@ -4,6 +4,8 @@ export interface ColumnTop {
   blockName: string;
   y: number;
   properties?: Readonly<Record<string, string>>;
+  underwater?: { blockName: string; y: number; depth: number; properties?: Readonly<Record<string, string>> };
+  ground?: { blockName: string; y: number; properties?: Readonly<Record<string, string>> };
 }
 
 export interface ChunkColumns {
@@ -17,12 +19,27 @@ export function readChunkColumns(chunk: Chunk, cx = chunk.x, cz = chunk.z): Chun
 
   for (let z = 0; z < 16; z++) {
     for (let x = 0; x < 16; x++) {
-      const top = chunk.getSurfaceBlock(x, z);
+      const { surface, underwater, ground } = chunk.getSurfaceColumn(x, z);
 
-      if (top) columns[x + z * 16] = {
-        blockName: top.state.id,
-        y: top.y,
-        properties: top.state.properties,
+      if (surface) columns[x + z * 16] = {
+        blockName: surface.state.id,
+        y: surface.y,
+        properties: surface.state.properties,
+        ...(underwater ? {
+          underwater: {
+            blockName: underwater.state.id,
+            y: underwater.y,
+            depth: underwater.depth,
+            properties: underwater.state.properties,
+          },
+        } : {}),
+        ...(ground ? {
+          ground: {
+            blockName: ground.state.id,
+            y: ground.y,
+            properties: ground.state.properties,
+          },
+        } : {}),
       };
     }
   }

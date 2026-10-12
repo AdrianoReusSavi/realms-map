@@ -7,6 +7,7 @@ export type Dimension = "overworld" | "nether" | "end";
 export interface WorldMeta {
   name: string;
   dimensions: Dimension[];
+  gameVersion?: string;
 }
 
 export interface WorldHandle {
@@ -49,10 +50,13 @@ async function findRegionDir(worldPath: string, dimension: Dimension): Promise<s
 }
 
 export async function scanWorld(worldPath: string): Promise<WorldMeta> {
-  const name = await readLevelName(worldPath);
+  const data = await readLevelData(worldPath);
+  const name = data?.LevelName;
+  const version = data?.Version;
   const dimensions = await detectDimensions(worldPath);
+  const gameVersion = isCompound(version) && typeof version.Name === "string" ? version.Name : undefined;
 
-  return { name, dimensions };
+  return { name: typeof name === "string" ? name : worldPath, dimensions, gameVersion };
 }
 
 export async function listRegionFiles(
@@ -87,19 +91,20 @@ export async function listRegionFiles(
   return refs;
 }
 
-async function readLevelName(worldPath: string): Promise<string> {
+async function readLevelData(worldPath: string): Promise<Record<string, unknown> | undefined> {
   try {
     const root = await NbtFile.read(join(worldPath, "level.dat"));
     const data = root.Data;
 
-    if (typeof data !== "object" || data === null || ArrayBuffer.isView(data) || Array.isArray(data)) return worldPath;
-
-    const name = (data as Record<string, unknown>).LevelName;
-
-    return typeof name === "string" ? name : worldPath;
+    if (!isCompound(data)) return undefined;
+    return data;
   } catch {
-    return worldPath;
+    return undefined;
   }
+}
+
+function isCompound(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !ArrayBuffer.isView(value) && !Array.isArray(value);
 }
 
 async function detectDimensions(worldPath: string): Promise<Dimension[]> {

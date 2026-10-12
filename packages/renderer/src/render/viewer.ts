@@ -8,6 +8,7 @@ export interface ViewerOptions {
   heightBlocks: number;
   minZoom: number;
   maxNativeZoom: number;
+  baseZoom: number;
   zoomIn: number;
   tileSize: number;
   background: string;
@@ -93,7 +94,7 @@ function buildHtml(opts: ViewerOptions): string {
   var regionData = new Map();
   ${regionIndex}.forEach(function (r) { regionData.set(r.regionX + ',' + r.regionZ, r); });
   var hoverToken = 0;
-  var scale = Math.pow(2, maxNativeZoom);
+  var scale = Math.pow(2, ${opts.baseZoom});
   var bounds = [[0, 0], [H / scale, W / scale]];
   var map = L.map('map', {
     crs: L.CRS.Simple,
@@ -134,7 +135,7 @@ function buildHtml(opts: ViewerOptions): string {
       }
       if (token !== hoverToken) return;
       var localX = x - rx * 512, localZ = z - rz * 512;
-      var offset = (localZ * 512 + localX) * 4;
+      var offset = (localZ * 512 + localX) * 12;
       var paletteIndex = region.view.getUint16(offset, true);
       var y = region.view.getInt16(offset + 2, true);
       info.textContent = paletteIndex ? region.palette[paletteIndex - 1] + ' · Y ' + y : 'No surface block';
