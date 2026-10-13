@@ -9,6 +9,7 @@
     "build": "tsc"
   },
   "dependencies": {
+    "fflate": "^0.8.3",
     "sharp": "^0.33.5"
   },
   "devDependencies": {

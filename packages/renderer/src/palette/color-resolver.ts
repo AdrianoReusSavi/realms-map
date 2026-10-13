@@ -44,6 +44,12 @@ export class BlockColorResolver {
     return FALLBACK;
   }
 
+  has(blockName: string): boolean {
+    const name = normalizeName(blockName);
+
+    return this.overrides.has(name) || normalized.has(name);
+  }
+
   isAir(blockName: string): boolean {
     const name = normalizeName(blockName);
     

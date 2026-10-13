@@ -1,4 +1,4 @@
-import type { BlockColorResolver } from "../palette/color-resolver.js";
+import type { BlockColorResolver, Rgb } from "../palette/color-resolver.js";
 import {
   type RegionGrid,
   type RenderStrategy,
@@ -9,9 +9,11 @@ import {
 
 export class TopDownStrategy implements RenderStrategy {
   private readonly background: [number, number, number];
+  private readonly coverage: Readonly<Record<string, number>>;
 
-  constructor(background: [number, number, number] = [0, 0, 0]) {
+  constructor(background: [number, number, number] = [0, 0, 0], coverage: Readonly<Record<string, number>> = {}) {
     this.background = background;
+    this.coverage = coverage;
   }
 
   renderRegion(grid: RegionGrid, resolver: BlockColorResolver): Uint8Array {
@@ -37,11 +39,7 @@ export class TopDownStrategy implements RenderStrategy {
           continue;
         }
 
-        const ground = top.ground
-          ? resolver.resolve(top.ground.blockName)
-          : top.underwater
-            ? resolver.resolve(top.underwater.blockName)
-            : resolver.resolve(top.blockName);
+        const ground = surfaceColor(resolver, this.coverage, top.underwater?.blockName ?? top.blockName, top.ground?.blockName);
         const waterDepth = top.ground ? top.y - top.ground.y : top.underwater?.depth ?? 0;
         const [r, g, b] = top.underwater ? blendWater(ground, waterDepth) : ground;
         const shade = hillshade(heights, x, z) * castShadow(heights, x, z);
@@ -54,6 +52,26 @@ export class TopDownStrategy implements RenderStrategy {
 
     return buf;
   }
+}
+
+export function surfaceColor(
+  resolver: BlockColorResolver,
+  coverage: Readonly<Record<string, number>>,
+  visible: string,
+  ground: string | undefined,
+): Rgb {
+  const top = resolver.resolve(visible);
+
+  if (!ground) return top;
+
+  const below = resolver.resolve(ground);
+  const amount = coverage[visible] ?? 0;
+
+  return [
+    below[0] + (top[0] - below[0]) * amount,
+    below[1] + (top[1] - below[1]) * amount,
+    below[2] + (top[2] - below[2]) * amount,
+  ];
 }
 
 const VERTICAL_EXAGGERATION = 1.25;

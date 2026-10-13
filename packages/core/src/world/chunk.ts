@@ -74,7 +74,7 @@ export class Chunk {
         return this.getSurfaceColumn(x, z).surface;
     }
 
-    public getSurfaceColumn(x: number, z: number): {
+    public getSurfaceColumn(x: number, z: number, isSeeThrough?: (id: string) => boolean): {
         surface: { y: number; state: BlockState } | null;
         underwater?: { y: number; state: BlockState; depth: number };
         ground?: { y: number; state: BlockState };
@@ -83,6 +83,7 @@ export class Chunk {
             throw new Error(`Invalid chunk coordinates: (${x}, ${z}).`);
         }
 
+        const isDecoration = (id: string) => isBuiltInDecoration(id) || isSeeThrough?.(id) === true;
         let surface: { y: number; state: BlockState } | null = null;
         let underwater: { y: number; state: BlockState; depth: number } | undefined;
 
@@ -178,7 +179,7 @@ function isAquaticDecoration(id: string): boolean {
     return id === "minecraft:seagrass" || id === "minecraft:tall_seagrass" || id === "minecraft:kelp" || id === "minecraft:kelp_plant";
 }
 
-function isDecoration(id: string): boolean {
+function isBuiltInDecoration(id: string): boolean {
     const name = id.slice(id.indexOf(":") + 1);
     return /^(?:dandelion|poppy|blue_orchid|allium|azure_bluet|tulip|oxeye_daisy|cornflower|lily_of_the_valley|wither_rose|sunflower|lilac|rose_bush|peony|short_grass|tall_grass|fern|large_fern|wheat|carrots|potatoes|beetroots|torchflower_crop|pitcher_crop|sapling|.*_sapling|.*_mushroom|dead_bush|sugar_cane|bamboo|.*_vine|cocoa|sweet_berry_bush|nether_wart|reeds|pink_petals|wildflowers|bush|firefly_bush|short_dry_grass|seagrass|tall_seagrass|kelp|kelp_plant|sea_pickle|pointed_dripstone)$/i.test(name);
 }

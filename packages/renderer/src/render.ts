@@ -1,17 +1,12 @@
 import { Worker } from "node:worker_threads";
 import { cpus } from "node:os";
-import { deflateSync } from "node:zlib";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { RegionFile } from "./anvil/region-reader.js";
-import { readChunkColumns, type ColumnTop } from "./anvil/chunk.js";
-import { TopDownStrategy } from "./render/top-down.js";
-import { type RegionGrid, REGION_SIZE, regionCellIndex } from "./render/strategy.js";
+import { REGION_SIZE } from "./render/strategy.js";
 import { buildTilePyramid, type WorldBounds, DEFAULT_TILE_SIZE } from "./render/tiles.js";
 import { writeViewer } from "./render/viewer.js";
-import { encodeRegionBlocks, type EncodedRegionBlocks } from "./render/block-data.js";
-import { defaultResolver } from "./palette/color-resolver.js";
-import { loadSurfaceTextureSamples } from "./render/texture-assets.js";
+import { renderRegions, resolverFor, type RegionJob, type RegionResult } from "./render/region-job.js";
+import { BlockTextures } from "./assets/block-textures.js";
 import {
   listRegionFiles,
   type MapSource,
@@ -69,7 +64,11 @@ export async function renderMap(
       worldImage[i * 4 + 3] = 255;
     }
 
-    const regionBuffers = await renderRegionsParallel(regions, bgRgb);
+    const textures = await loadBlockTextures(handle.meta.gameVersion);
+    const profile = await textures?.profile();
+    const resolver = resolverFor(profile);
+    const seeThrough = new Set(profile?.seeThrough);
+    const regionBuffers = await renderRegionsParallel({ regions, background: bgRgb, profile });
 
     await mkdir(join(opts.outputPath, "blocks"), { recursive: true });
 
@@ -84,10 +83,14 @@ export async function renderMap(
       viewerRegions.push({ regionX, regionZ, dataPath, palette });
     }
 
-    const textureSamples = await loadSurfaceTextureSamples(
-      handle.meta.gameVersion,
-      regionBuffers.flatMap((region) => region.palette),
-    );
+    const textureSamples = textures
+      ? await textures.samples(
+        regionBuffers.flatMap((region) => region.palette),
+        (id) => seeThrough.has(id) ? undefined : resolver.resolve(id),
+      )
+      : new Map<string, Buffer>();
+
+    if (textures) console.log(`Loaded ${textureSamples.size} block textures from Minecraft ${handle.meta.gameVersion}.`);
 
     const bounds: WorldBounds = {
       minBlockX: minRX * REGION_SIZE,
@@ -100,6 +103,8 @@ export async function renderMap(
       background: bgRgb,
       regionBlocks: regionBuffers,
       textures: textureSamples,
+      resolver,
+      coverage: profile?.coverage,
     });
 
     await writeViewer({
@@ -132,25 +137,38 @@ export async function renderMap(
   }
 }
 
-interface RegionBuffer extends EncodedRegionBlocks {
-  buffer: Uint8Array;
+async function loadBlockTextures(gameVersion: string | undefined): Promise<BlockTextures | null> {
+  if (!gameVersion) {
+    warn("The world does not record its Minecraft version; rendering without textures.");
+    return null;
+  }
+
+  try {
+    return await BlockTextures.load(gameVersion);
+  } catch (error) {
+    warn(`Could not load Minecraft ${gameVersion} textures; rendering without them. ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
 }
 
-async function renderRegionsParallel(
-  regions: RegionRef[],
-  background: [number, number, number],
-): Promise<RegionBuffer[]> {
-  const workerCount = Math.min(cpus().length, regions.length, 8);
+function warn(message: string): void {
+  console.warn(process.env.GITHUB_ACTIONS === "true" ? `::warning::${message}` : message);
+}
 
-  if (workerCount <= 1 || regions.length <= 1) {
-    return renderRegionsSequential(regions, background);
+async function renderRegionsParallel(job: RegionJob): Promise<RegionResult[]> {
+  const { regions } = job;
+  const workerCount = Math.min(cpus().length, regions.length, 8);
+  const results: RegionResult[] = [];
+
+  if (workerCount <= 1) {
+    await renderRegions(job, (result) => results.push(result));
+    return results;
   }
 
   const batches: RegionRef[][] = Array.from({ length: workerCount }, () => []);
   regions.forEach((r, i) => batches[i % workerCount].push(r));
 
   const workerUrl = new URL("./render/worker.js", import.meta.url);
-  const results: RegionBuffer[] = [];
 
   await Promise.all(
     batches.map(
@@ -158,7 +176,7 @@ async function renderRegionsParallel(
         new Promise<void>((resolve, reject) => {
           const worker = new Worker(workerUrl);
 
-          worker.on("message", (msg: RegionBuffer & { done?: boolean }) => {
+          worker.on("message", (msg: RegionResult & { done?: boolean }) => {
             if (msg.done) {
               worker.terminate();
               resolve();
@@ -168,43 +186,10 @@ async function renderRegionsParallel(
           });
 
           worker.on("error", reject);
-          worker.postMessage({ regions: batch, background });
+          worker.postMessage({ ...job, regions: batch } satisfies RegionJob);
         }),
     ),
   );
-
-  return results;
-}
-
-async function renderRegionsSequential(
-  regions: RegionRef[],
-  background: [number, number, number],
-): Promise<RegionBuffer[]> {
-  const strategy = new TopDownStrategy(background);
-  const results: RegionBuffer[] = [];
-
-  for (const ref of regions) {
-    const region = await RegionFile.open(ref.path, ref.regionX, ref.regionZ);
-    const columns: (ColumnTop | null)[] = new Array(REGION_SIZE * REGION_SIZE).fill(null);
-
-    for await (const chunk of region.iterChunks()) {
-      const { cx, cz, columns: chunkCols } = readChunkColumns(chunk.root, chunk.cx, chunk.cz);
-      const localX = cx - region.regionX * 32;
-      const localZ = cz - region.regionZ * 32;
-
-      for (let z = 0; z < 16; z++) {
-        for (let x = 0; x < 16; x++) {
-          columns[regionCellIndex(localX * 16 + x, localZ * 16 + z)] = chunkCols[x + z * 16];
-        }
-      }
-    }
-
-    const grid: RegionGrid = { regionX: ref.regionX, regionZ: ref.regionZ, columns };
-    const buffer = strategy.renderRegion(grid, defaultResolver);
-    const blockInfo = encodeRegionBlocks(grid);
-
-    results.push({ ...blockInfo, data: deflateSync(blockInfo.data), buffer });
-  }
 
   return results;
 }

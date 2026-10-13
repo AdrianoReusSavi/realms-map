@@ -3,7 +3,8 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { inflateSync } from "node:zlib";
 import type { EncodedRegionBlocks } from "./block-data.js";
-import { defaultResolver } from "../palette/color-resolver.js";
+import { type BlockColorResolver, defaultResolver } from "../palette/color-resolver.js";
+import { surfaceColor } from "./top-down.js";
 
 export const DEFAULT_TILE_SIZE = 256;
 
@@ -40,6 +41,8 @@ export async function buildTilePyramid(
     background?: [number, number, number];
     regionBlocks?: EncodedRegionBlocks[];
     textures?: Map<string, Buffer>;
+    resolver?: BlockColorResolver;
+    coverage?: Readonly<Record<string, number>>;
   },
 ): Promise<PyramidResult> {
   const tileSize = options?.tileSize ?? DEFAULT_TILE_SIZE;
@@ -90,7 +93,10 @@ export async function buildTilePyramid(
   if (hasTextures) {
     await writeNearestZoom(worldImage, bounds, tilesPath, tileSize, background, 1);
     await writeNearestZoom(worldImage, bounds, tilesPath, tileSize, background, 2);
-    await writeTextureZoom(worldImage, bounds, tilesPath, tileSize, background, options!.regionBlocks!, options!.textures!);
+    await writeTextureZoom(worldImage, bounds, tilesPath, tileSize, background, options!.regionBlocks!, options!.textures!, {
+      resolver: options?.resolver ?? defaultResolver,
+      coverage: options?.coverage ?? {},
+    });
   }
 
   return { minZoom: 0, maxZoom, baseZoom, tileSize, tilesPath, canvasSize };
@@ -149,6 +155,7 @@ async function writeTextureZoom(
   background: [number, number, number],
   regions: EncodedRegionBlocks[],
   textures: Map<string, Buffer>,
+  { resolver, coverage }: { resolver: BlockColorResolver; coverage: Readonly<Record<string, number>> },
 ): Promise<void> {
   const textureScale = 8;
   const width = bounds.widthBlocks * textureScale;
@@ -209,17 +216,21 @@ async function writeTextureZoom(
 
           const worldOffset = (blockZ * bounds.widthBlocks + blockX) * 4;
           const baseName = baseInfo?.split(" ", 1)[0] ?? topName;
-          const base = [...defaultResolver.resolve(baseName)];
+          const visibleName = visibleInfo?.split(" ", 1)[0] ?? topName;
+          const base = [...resolver.resolve(baseName)];
+          const unshaded = [...surfaceColor(resolver, coverage, visibleName, groundIndex ? baseName : undefined)];
           const shade = [0, 0, 0];
 
           if (opacity > 0) {
-            base[0] = base[0] * (1 - opacity) + 54 * opacity;
-            base[1] = base[1] * (1 - opacity) + 112 * opacity;
-            base[2] = base[2] * (1 - opacity) + 170 * opacity;
+            for (const color of [base, unshaded]) {
+              color[0] = color[0] * (1 - opacity) + 54 * opacity;
+              color[1] = color[1] * (1 - opacity) + 112 * opacity;
+              color[2] = color[2] * (1 - opacity) + 170 * opacity;
+            }
           }
 
           for (let channel = 0; channel < 3; channel++) {
-            shade[channel] = worldImage[worldOffset + channel] / Math.max(1, base[channel]);
+            shade[channel] = worldImage[worldOffset + channel] / Math.max(1, unshaded[channel]);
           }
 
           for (let dz = 0; dz < textureScale; dz++) {

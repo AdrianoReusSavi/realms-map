@@ -14,12 +14,17 @@ export interface ChunkColumns {
   columns: (ColumnTop | null)[];
 }
 
-export function readChunkColumns(chunk: Chunk, cx = chunk.x, cz = chunk.z): ChunkColumns {
+export function readChunkColumns(
+  chunk: Chunk,
+  cx = chunk.x,
+  cz = chunk.z,
+  isSeeThrough?: (id: string) => boolean,
+): ChunkColumns {
   const columns: (ColumnTop | null)[] = new Array(256).fill(null);
 
   for (let z = 0; z < 16; z++) {
     for (let x = 0; x < 16; x++) {
-      const { surface, underwater, ground } = chunk.getSurfaceColumn(x, z);
+      const { surface, underwater, ground } = chunk.getSurfaceColumn(x, z, isSeeThrough);
 
       if (surface) columns[x + z * 16] = {
         blockName: surface.state.id,
